@@ -1,0 +1,209 @@
+from read_values import catch_arr
+import numpy as np
+import numba
+import itertools
+
+
+k = catch_arr()
+
+pics = np.array(k[0]) 
+paths = np.array(k[1])
+
+class csort:
+    def __init__(self,data ,path):
+        self.data = data
+        self.path = path
+        self()
+
+    def preprocessing(self , reshape = (72,72)): 
+        import numpy as np
+        import os
+        import cv2
+
+        if reshape[0] != reshape[1]:
+            raise ValueError("picture size must be square")
+        if reshape[0] > 100:
+            raise ValueError("max size exceeded")
+
+        n_arr = np.array([])
+        for img_path in os.listdir(self.path):
+            new_img = cv2.imread(img_path , cv2.IMREAD_COLOR)
+            new_image = np.array(cv2.resize(new_img , reshape))
+            final_norm = self.normalize_array(new_image) 
+            n_arr.append(final_norm)
+        return n_arr
+
+    def normalize_array(self,arr , new_min = 0 , new_max = 1):
+        # since the values of the array are from {0 - 255} we want to range the values from {0 - 1}
+
+        old_min = np.min(arr)
+        old_max = np.max(arr) 
+
+        normalized_array = new_min + (arr - old_min) * (new_max - new_min) / (old_max - old_min) # {RGB values scaled to [0 , 1]}
+
+        return normalized_array
+
+    def normalize_each(self): # if data will be used in a CNN / avoid integer overflow
+        return self.normalize_array(self.data)
+  
+    def get_r15552(self):
+        # so the data basically has the dimensions 72 X 72 X 3
+        # in linear algbrea we know that R^(72 X 72 X 3) is a eucleidan space because it has  vector addition
+        # scalar multiplication , and the inner product 
+        # this means R^ (72 X 72 X 3) == R ^ 15552
+        # so we will esentially go through each array and completley flatten so that we can perform the eucldiean distance
+        # on the matrix point in space
+        import numpy as np
+        res = []
+        for arr in self.data:
+            res.append(arr.flatten()) # completley flattens the array
+        res = np.array(res)
+        return res
+
+    def eucleidan_distance(self,arr1,arr2):
+        distance  = 0
+        if len(arr1) == len(arr2):
+            
+            for i in range(len(arr1)):
+                distance += (arr1[i] - arr2[i]) ** 2
+            return distance
+        else:
+            print(str(len(arr1)) + "    " + str(len(arr2)))
+            raise ValueError("Incompatible shape")
+
+
+
+        
+    def compute_length(self):
+        return 72 * 72 * 3
+
+    def Cmean(self,arr):
+        # x = [sum(col) / len(col) for col in zip(*arr)]
+        # return x
+        # relying on pythons for loops for list comprehsnion is way to computationaly heavy
+        # use numpy intead
+        # C optimized under the hood
+        import numpy as np
+        means = np.mean(arr , axis = 0)
+        return means
+
+    def compute_error(self,arr1,arr2):
+        import numpy as np
+        a = np.sum(arr1)
+        b = np.sum(arr2)
+        error = (a - b) ** 2
+        return error
+       
+    def print_error(self,arr1,arr2):
+        import numpy as np
+        a = np.sum(arr1)
+        b = np.sum(arr2)
+        error = (a - b) ** 2
+        print(" Current Error ~ " +str(error))
+        print('                     ')
+        return error
+        
+
+    def recreate(self,n):
+        import collections
+        adj = collections.defaultdict(list)
+        for val in range(n):
+            adj[val].append([])
+            adj[val].clear()
+        return adj
+
+    def empty(self,arr):
+        arr = []
+        return arr
+
+
+    def fit(self , k = 4):
+        import random
+        import collections
+
+        if k > 20:
+            raise ValueError("max cluster limit is 20")
+
+        vector_space = self.get_r15552() 
+        path_space = self.path 
+
+        random_centroids = [] # initialized random centroids
+        new_centroids = [] # new centroids to check as they converge the optimum points
+
+        for val in range(k):
+            random_centroids.append(self.normalize_array([random.randint(0,255) for x in range(self.compute_length())]))    
+
+
+        adj = collections.defaultdict(list) 
+
+        for val in range(k):
+            adj[val].append([])
+ 
+
+        for n in adj:
+            adj[n].clear()
+
+        def compute_new(random_centroids , new_centroids , adj , vector_space):
+            for point in vector_space:
+                distance = []
+                for centroid in random_centroids:
+                    distance.append(self.eucleidan_distance(point,centroid))
+                smallest_distance = min(distance)
+                group_index = distance.index(smallest_distance)
+                adj[group_index].append(point)
+
+            new_centroids.clear()
+
+            for cluster_id in adj:
+                grouping = adj[cluster_id]
+                new = self.Cmean(grouping)
+                new_centroids.append(new)
+
+
+            return new_centroids
+
+        # preliminary computation
+
+        self.print_error(random_centroids,new_centroids)
+
+        new = compute_new(random_centroids , new_centroids , adj , vector_space)
+
+        adj = self.recreate(k)
+        new_centroids = self.empty(new_centroids)
+
+        self.print_error(random_centroids,new)
+
+        random_centroids = new
+
+        newer = compute_new(random_centroids,new_centroids,adj,vector_space)
+
+        adj = self.recreate(k)
+        new_centroids = self.empty(new_centroids)
+
+        self.print_error(random_centroids,newer)
+
+        random_centroids = newer
+
+        for i in range(10**18):
+            newest = compute_new(random_centroids,new_centroids,adj,vector_space)
+            adj = self.recreate(k)
+            new_centroids = self.empty(new_centroids)
+            if self.print_error(random_centroids,newest) <= 0:
+                return adj
+            random_centroids = newest
+
+          
+    def   __call__(self):
+        import numpy as np
+        if type(self.data) != type(np.array([])):
+            raise ValueError("Invalid DataType")
+        else:
+            print(' Starting Clustering ')
+            print('                     ')
+            self.data = self.normalize_array(self.data) # - > avoids integer overflow
+
+ 
+k = csort(data= pics, path=paths)
+
+k.fit()
+

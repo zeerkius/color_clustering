@@ -66,9 +66,9 @@ class csort:
     def eucleidan_distance(self,arr1,arr2):
         distance  = 0
         if len(arr1) == len(arr2):
-            
             for i in range(len(arr1)):
                 distance += (arr1[i] - arr2[i]) ** 2
+            distance = self.sqrt(distance)
             return distance
         else:
             print(str(len(arr1)) + "    " + str(len(arr2)))
@@ -105,7 +105,23 @@ class csort:
         print(" Current Error ~ " +str(error))
         print('                     ')
         return error
-        
+
+    @staticmethod
+    @numba.njit
+    def sqrt(x):
+        # binary search O(log(n)) takes to long for values 0 < x < 1
+        # using newtons method O(log(log(n)) time 
+        # fast convergence
+        # f(m) = m^2 - x = 0
+        # m_new = m + (x / m) / 2
+        if x < 1:
+            m = x
+        else:
+            m = x / 2
+            for i in range(100):
+                m = m + (x / m)
+                m = m / 2
+            return m
 
     def recreate(self,n):
         import collections
@@ -118,6 +134,12 @@ class csort:
     def empty(self,arr):
         arr = []
         return arr
+
+    def nsted_list(self,arr):
+        res = []
+        for ar in arr:
+            res.append(ar.tolist())
+        return res
 
 
     def fit(self , k = 4):
@@ -145,6 +167,7 @@ class csort:
 
         for n in adj:
             adj[n].clear()
+
 
         def compute_new(random_centroids , new_centroids , adj , vector_space):
             for point in vector_space:
@@ -189,11 +212,32 @@ class csort:
 
         for i in range(10**18):
             newest = compute_new(random_centroids,new_centroids,adj,vector_space)
-            adj = self.recreate(k)
-            new_centroids = self.empty(new_centroids)
             if self.print_error(random_centroids,newest) <= 0:
-                return adj
-            random_centroids = newest
+                ## we will then unpack and create a file with subfolders {subfolder} in adj
+                import os
+                import shutil
+                import collections
+                adj_paths = collections.defaultdict(list)
+                csort_pics = ["csort_sorted"]
+                for subfolder in adj:
+                    sub = str(subfolder)
+                    os.makedirs(os.path.join(csort_pics[0],sub) , exist_ok=True) # makes the folder
+                    string_folder = os.path.join(csort_pics[0],sub)
+                    folder_values = adj[subfolder]
+                    for pic in folder_values:
+                        # change vector_space type
+                        vp = self.nsted_list(vector_space)
+                        i = vp.index(list(tuple(pic))) # to allow for comparison
+                        og_path = self.path[i]
+                        end = os.path.basename(self.path[i]) # end of path ie the file then its extension
+                        dst = os.path.join(string_folder,end)
+                        shutil.copy(og_path,dst)
+                        adj_paths[subfolder].append(og_path)
+                return adj_paths
+            else:
+                adj = self.recreate(k)
+                new_centroids = self.empty(new_centroids)
+                random_centroids = newest
 
           
     def   __call__(self):
@@ -226,17 +270,10 @@ if __name__ == "__main__":
     stop_event = threading.Event() # - > so this is an event for each what would be thread to execture the animation
     animation_thread = threading.Thread(target=animation,args=(stop_event,)) # the comma signifies tuples
     animation_thread.start() # start thread
-    k.fit() # run clutsering
+    k.fit(k = 9) # run clutsering
     stop_event.set() # so this allows for the little process of animation to animate , then stop
     animation_thread.join()
     print(" Clustering Finished !")
-
-
-
-
-
-
-
 
 
 
